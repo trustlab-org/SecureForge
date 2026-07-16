@@ -10,6 +10,50 @@
 
 ---
 
+## Quick Start (Local Installation)
+
+To deploy the full SecureForge platform locally for evaluation or development, ensure you have **Docker** and **Docker Compose** installed.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/kushagrakushwah/bas_v3.git
+cd bas_v3
+
+# 2. Configure environment variables
+cp .env.example .env
+
+# 3. Build and launch the containerized stack
+docker-compose up -d --build
+```
+
+Once the containers are running, access the platform at:
+
+- **Frontend Dashboard:** `http://localhost:3000`
+- **Backend API & Docs:** `http://localhost:8000/docs`
+
+### Required Environment Variables
+
+Before launching, make sure these are set in your `.env` file:
+
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `DATABASE_URL` | Yes | PostgreSQL connection string. Must use `asyncpg` driver. |
+| `REDIS_URL` | Yes | Redis connection string for the Celery message broker. |
+| `API_KEY` | Yes | Bearer token required to access the REST API. |
+| `NEXTAUTH_SECRET` | Yes | 32-byte random string used to sign JWTs in the frontend. |
+| `LOG_LEVEL` | No | Set to `DEBUG` for verbose Celery task tracing (default: `INFO`). |
+| `MAX_CONCURRENT_ATTACKS` | No | Hard limit on concurrent async requests per module (default: `50`). |
+
+### Common Setup Issues
+
+**Simulations stuck in `PENDING`?** The Celery workers aren't running or can't reach Redis. Check with `docker logs secureforge-celery-worker-1` and verify `REDIS_URL` is correct.
+
+**Live Telemetry stream is blank?** WebSocket connection failure. Make sure your reverse proxy (Nginx, Traefik, or AWS ALB) is configured to allow WebSocket upgrades (`Connection: Upgrade`, `Upgrade: websocket`) on the `/ws` route.
+
+**`asyncpg.exceptions.TooManyConnectionsError`?** You've scaled Celery workers beyond what PostgreSQL can handle. Either reduce worker count or increase `max_connections` in `postgresql.conf`.
+
+---
+
 ## 1. Executive Summary & Overview
 
 SecureForge is a highly advanced, self-hosted **BAS (Breach & Attack Simulation) platform** designed specifically for security engineering teams that need a reliable, repeatable way to test their detection stack without touching production systems.
@@ -130,7 +174,7 @@ SecureForge utilizes a deeply decoupled, highly asynchronous microservices archi
 ```
 
 ### 3.1 The Frontend (secureforge-frontend)
-Built on **Next.js 14**, the frontend utilizes React Server Components (RSC) alongside traditional client-side hooks to deliver a blazing-fast user experience. 
+Built on **Next.js 14**, the frontend utilizes React Server Components (RSC) alongside traditional client-side hooks to deliver a blazing-fast user experience.
 - **Styling:** TailwindCSS is used exclusively for utility-first styling, enabling the sleek, dark-mode-first aesthetic (Glassmorphism, deep violets, and emerald accents).
 - **State Management:** React hooks (`useState`, `useEffect`) and context providers manage the complex state required for the MITRE ATT&CK grid and active simulations.
 - **Real-time Engine:** The frontend maintains a persistent WebSocket connection to the backend, rendering streaming logs directly into the terminal UI of the Live Operations page.
@@ -142,7 +186,7 @@ The core API is powered by **FastAPI**. It is an asynchronous, high-throughput g
 - **Validation Engine:** Contains the logic to cross-reference raw findings against the MITRE ATT&CK framework and calculate complex metrics like the SOC Detection Score.
 
 ### 3.3 The Distributed Worker Fleet (Celery & Redis)
-Because network scanning, fuzzing, and brute-forcing are highly I/O bound and computationally expensive, they cannot run within the FastAPI event loop. 
+Because network scanning, fuzzing, and brute-forcing are highly I/O bound and computationally expensive, they cannot run within the FastAPI event loop.
 - **Redis:** Acts as the message broker. When the API receives a simulation request, it pushes the job onto a Redis queue.
 - **Celery Workers:** Independent Python processes running in separate Docker containers. They pull jobs off the Redis queue and execute the actual attack scripts (`owasp_web.py`, `nmap_scan.py`, etc.).
 - **Scalability:** You can easily scale the number of Celery worker containers to run dozens of simulations concurrently across hundreds of targets without degrading the API performance.
@@ -201,7 +245,7 @@ SecureForge comes packed with **18 highly detailed, production-grade attack modu
 
 #### 5.1.5 WAF Evasion & Detection
 **MITRE Tactics:** Defense Evasion (TA0005)
-**Description:** specifically designed to test the efficacy of Web Application Firewalls (like Cloudflare, AWS WAF, or Imperva). It fires a barrage of mutated payloads (e.g., heavily encoded SQLi strings, fragmented HTTP requests, and obfuscated cross-site scripting vectors) to determine exactly which payloads bypass the filter. It fingerprints the WAF based on HTTP response headers and block pages.
+**Description:** Specifically designed to test the efficacy of Web Application Firewalls (like Cloudflare, AWS WAF, or Imperva). It fires a barrage of mutated payloads (e.g., heavily encoded SQLi strings, fragmented HTTP requests, and obfuscated cross-site scripting vectors) to determine exactly which payloads bypass the filter. It fingerprints the WAF based on HTTP response headers and block pages.
 
 #### 5.1.6 Privilege Escalation Simulator
 **MITRE Tactics:** Privilege Escalation (TA0004)
@@ -301,7 +345,7 @@ SecureForge provides a full, unauthenticated REST API for programmatic control o
 
 ## 7. Data Models & Schema
 
-The platform relies on a strict schema implemented via Pydantic (for the API) and SQLAlchemy (for PostgreSQL). 
+The platform relies on a strict schema implemented via Pydantic (for the API) and SQLAlchemy (for PostgreSQL).
 
 ### 7.1 The `Simulation` Entity
 The core entity tracking the lifecycle of an attack campaign.
@@ -323,33 +367,11 @@ Represents a single successful exploit or discovered vulnerability.
 
 ---
 
-## 8. Quick Start (Local Installation)
-
-To deploy the full SecureForge platform locally for evaluation or development, ensure you have Docker and Docker Compose installed.
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/kushagrakushwah/bas_v3.git
-cd bas_v3
-
-# 2. Configure environment variables
-cp .env.example .env
-
-# 3. Build and launch the containerized stack
-docker-compose up -d --build
-```
-
-Once the containers are successfully built and running, you can access the platform at:
-* **Frontend Dashboard:** `http://localhost:3000`
-* **Backend API & Docs:** `http://localhost:8000/docs`
-
----
-
-## 9. Enterprise Deployment & Scaling Guide
+## 8. Enterprise Deployment & Scaling Guide
 
 While the quick start uses a standard `docker-compose.yml`, deploying SecureForge in a production enterprise environment requires a more robust architecture, typically involving Kubernetes (K8s).
 
-### 9.1 Scaling the Celery Worker Fleet
+### 8.1 Scaling the Celery Worker Fleet
 If you are running simulations against thousands of IP addresses, a single Celery worker will become a bottleneck. You can scale the workers horizontally:
 
 **Docker Compose:**
@@ -361,13 +383,13 @@ This will spin up 10 independent worker containers, all pulling from the same Re
 **Kubernetes (HPA):**
 In a K8s environment, the `celery-worker` deployment should be configured with a Horizontal Pod Autoscaler (HPA) targeting CPU utilization. As the Redis queue fills up during a massive simulation, the HPA will automatically spin up additional worker pods to handle the load.
 
-### 9.2 Database Tuning
+### 8.2 Database Tuning
 For large environments, the PostgreSQL database must be tuned to handle high-frequency writes (as findings and logs are continuously streamed in).
 * Increase `max_connections` to at least 500.
 * Increase `shared_buffers` to 25% of available RAM.
 * Increase `work_mem` to prevent complex analytic queries from spilling to disk.
 
-### 9.3 ELK Stack Forwarding
+### 8.3 ELK Stack Forwarding
 To integrate with your existing SIEM:
 1. Ensure the `ELASTICSEARCH_URL` is set in the `.env` file.
 2. The `bas_engine` will automatically instantiate an asynchronous forwarder that pushes all attack telemetry (every HTTP request made, every payload fired) to an index named `secureforge-telemetry-*`.
@@ -375,38 +397,7 @@ To integrate with your existing SIEM:
 
 ---
 
-## 10. Configuration & Environment Variables
-
-The entire platform is configured via environment variables, adhering to the 12-Factor App methodology.
-
-| Variable Name | Required | Default | Description |
-| :--- | :---: | :--- | :--- |
-| `DATABASE_URL` | Yes | `postgresql+asyncpg://...` | Connection string for the PostgreSQL database. Must use `asyncpg`. |
-| `REDIS_URL` | Yes | `redis://redis:6379/0` | Connection string for the Celery message broker. |
-| `API_KEY` | Yes | None | The Bearer token required to access the REST API. |
-| `NEXTAUTH_SECRET` | Yes | None | 32-byte secure random string used to sign JWTs in the frontend. |
-| `LOG_LEVEL` | No | `INFO` | Set to `DEBUG` for verbose Celery task tracing. |
-| `MAX_CONCURRENT_ATTACKS`| No | `50` | Hard limit on the number of concurrent asynchronous requests a single module can make. |
-
----
-
-## 11. Troubleshooting & FAQ
-
-**Q: My simulations are stuck in the `PENDING` state forever. Why?**
-**A:** This indicates that the Celery workers are not running, or they cannot connect to the Redis broker. Check the worker logs using `docker logs secureforge-celery-worker-1`. Ensure `REDIS_URL` is configured correctly.
-
-**Q: The Live Telemetry stream is blank, but the simulation is running.**
-**A:** This is a WebSocket connection failure. Ensure that your reverse proxy (Nginx, Traefik, or AWS ALB) is configured to allow WebSocket upgrades (`Connection: Upgrade`, `Upgrade: websocket`) on the `/ws` route.
-
-**Q: I'm getting `asyncpg.exceptions.TooManyConnectionsError`.**
-**A:** You have scaled your Celery workers too high without increasing the PostgreSQL `max_connections` setting. Either decrease the worker count or tune the `postgresql.conf` file.
-
-**Q: Does SecureForge test internal networks or just external?**
-**A:** Both. SecureForge tests whatever it has routing access to. If you deploy it inside your DMZ, it will attack the DMZ. If you deploy it on an internal corporate VLAN, it will test internal segmentation.
-
----
-
-## 12. Security Considerations for the Platform
+## 9. Security Considerations for the Platform
 
 Deploying an offensive security tool on your network requires careful consideration of the platform's own security posture.
 
@@ -417,9 +408,9 @@ Deploying an offensive security tool on your network requires careful considerat
 
 ---
 
-## 13. Legal Disclaimer
+## 10. Legal Disclaimer
 
-SecureForge is an offensive security tool designed exclusively for authorized testing and educational purposes. Usage of this tool for attacking targets without prior mutual consent is strictly prohibited and likely illegal. It is the end user's responsibility to obey all applicable local, state, and federal laws. The developers, contributors, and affiliated organizations assume no liability and are not responsible for any misuse, damage, or data loss caused by this program. 
+SecureForge is an offensive security tool designed exclusively for authorized testing and educational purposes. Usage of this tool for attacking targets without prior mutual consent is strictly prohibited and likely illegal. It is the end user's responsibility to obey all applicable local, state, and federal laws. The developers, contributors, and affiliated organizations assume no liability and are not responsible for any misuse, damage, or data loss caused by this program.
 
 **By deploying this software, you acknowledge that you have explicit authorization to test the target environments and understand the risks associated with automated breach and attack simulation.**
 
