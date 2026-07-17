@@ -12,43 +12,109 @@
 
 ## Quick Start (Local Installation)
 
-To deploy the full SecureForge platform locally for evaluation or development, ensure you have **Docker** and **Docker Compose** installed.
+> **Prerequisites:** Docker and Docker Compose must be installed.
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/kushagrakushwah/bas_v3.git
 cd bas_v3
 
-# 2. Configure environment variables
+# 2. Set up your environment file
 cp .env.example .env
 
-# 3. Build and launch the containerized stack
+# 3. Fill in all REQUIRED values in .env (see section below)
+
+# 4. Build and launch the containerized stack
 docker-compose up -d --build
 ```
 
-Once the containers are running, access the platform at:
+Once running, access the platform at:
 
-- **Frontend Dashboard:** `http://localhost:3000`
+- **Frontend Dashboard:** `http://localhost:3001`
 - **Backend API & Docs:** `http://localhost:8000/docs`
 
-### Required Environment Variables
+---
 
-Before launching, make sure these are set in your `.env` file:
+## Environment Configuration
 
-| Variable | Required | Description |
-| :--- | :---: | :--- |
-| `DATABASE_URL` | Yes | PostgreSQL connection string. Must use `asyncpg` driver. |
-| `REDIS_URL` | Yes | Redis connection string for the Celery message broker. |
-| `API_KEY` | Yes | Bearer token required to access the REST API. |
-| `NEXTAUTH_SECRET` | Yes | 32-byte random string used to sign JWTs in the frontend. |
-| `LOG_LEVEL` | No | Set to `DEBUG` for verbose Celery task tracing (default: `INFO`). |
-| `MAX_CONCURRENT_ATTACKS` | No | Hard limit on concurrent async requests per module (default: `50`). |
+SecureForge is configured entirely via environment variables. Copy `.env.example` to `.env` and fill in every `REPLACE_WITH_...` placeholder before running `docker-compose up`.
+
+> ⚠️ **Never commit your `.env` file.** It is already excluded via `.gitignore`. `.env.example` (with placeholders only) is what lives in the repo.
+
+### Generating secure values
+
+```bash
+# For API_KEY and NEXTAUTH_SECRET
+openssl rand -hex 32
+
+# For passwords (Postgres, Redis, Elastic, Admin, Operator)
+openssl rand -base64 32
+```
+
+### Variable Reference
+
+#### API Authentication (`REQUIRED`)
+| Variable | Description |
+| :--- | :--- |
+| `API_KEY` | Bearer token that secures all REST API endpoints. Must be at least 32 hex characters. Rotate immediately if exposed. Generate with `openssl rand -hex 32`. |
+
+#### NextAuth Session Signing (`REQUIRED`)
+| Variable | Description |
+| :--- | :--- |
+| `NEXTAUTH_SECRET` | Cryptographically random string used to sign JWTs in the frontend. Must be identical in both the backend and `secureforge-frontend`. Generate with `openssl rand -base64 32`. |
+
+#### PostgreSQL (`REQUIRED`)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `POSTGRES_USER` | `secureforge` | Database username. |
+| `POSTGRES_PASSWORD` | — | Strong password for the database user. |
+| `POSTGRES_DB` | `secureforge` | Name of the database to create. |
+
+#### Dashboard Login Credentials (`REQUIRED`)
+| Variable | Description |
+| :--- | :--- |
+| `ADMIN_PASSWORD` | Password for the `admin` role. Full access to all platform features. |
+| `OPERATOR_PASSWORD` | Password for the `operator` role. Can launch simulations but cannot modify platform config. |
+
+> Set these **before** running `docker-compose up --build`. They are baked in at container build time.
+
+#### Redis Broker Auth (`REQUIRED`)
+| Variable | Description |
+| :--- | :--- |
+| `REDIS_PASSWORD` | Must match the `--requirepass` value set in `docker-compose.yml`. |
+
+#### Elasticsearch Security (`REQUIRED` if `xpack.security.enabled=true`)
+| Variable | Description |
+| :--- | :--- |
+| `ELASTIC_PASSWORD` | Password for the built-in Elastic superuser. Only needed if you enable X-Pack security. |
+
+#### Deployment URLs (`OPTIONAL`)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `NEXTAUTH_URL` | `http://localhost:3001` | Full URL of the frontend. Must be updated for non-localhost deployments. |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Full URL of the backend API, as seen by the browser. |
+| `ENVIRONMENT` | `production` | Set to `development` for verbose error output. |
+
+#### Lab Targets (`OPTIONAL`)
+| Variable | Description |
+| :--- | :--- |
+| `LAB_TARGETS` | Comma-separated list of private IPs that bypass the built-in SSRF block for authorized lab testing. Leave empty in production. **Never include real production IPs.** |
+
+#### SMTP Alerting (`OPTIONAL`)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `SMTP_SERVER` | — | Hostname of your mail relay (e.g. `smtp.gmail.com`). |
+| `SMTP_PORT` | `587` | SMTP port. Use `587` for STARTTLS or `465` for SSL. |
+| `SMTP_USER` | — | SMTP login username. |
+| `SMTP_PASS` | — | SMTP login password or app-specific token. |
+
+---
 
 ### Common Setup Issues
 
-**Simulations stuck in `PENDING`?** The Celery workers aren't running or can't reach Redis. Check with `docker logs secureforge-celery-worker-1` and verify `REDIS_URL` is correct.
+**Simulations stuck in `PENDING`?** The Celery workers aren't running or can't reach Redis. Check with `docker logs secureforge-celery-worker-1` and verify `REDIS_URL` and `REDIS_PASSWORD` are correct.
 
-**Live Telemetry stream is blank?** WebSocket connection failure. Make sure your reverse proxy (Nginx, Traefik, or AWS ALB) is configured to allow WebSocket upgrades (`Connection: Upgrade`, `Upgrade: websocket`) on the `/ws` route.
+**Live Telemetry stream is blank?** WebSocket connection failure. Make sure your reverse proxy (Nginx, Traefik, or AWS ALB) allows WebSocket upgrades (`Connection: Upgrade`, `Upgrade: websocket`) on the `/ws` route.
 
 **`asyncpg.exceptions.TooManyConnectionsError`?** You've scaled Celery workers beyond what PostgreSQL can handle. Either reduce worker count or increase `max_connections` in `postgresql.conf`.
 
