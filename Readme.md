@@ -35,78 +35,103 @@ Once running, access the platform at:
 
 ---
 
-## Environment Configuration
+## Environment Variable Setup
 
-SecureForge is configured entirely via environment variables. Copy `.env.example` to `.env` and fill in every `REPLACE_WITH_...` placeholder before running `docker-compose up`.
+> **Before starting the stack you must fill in every `REQUIRED` variable in your `.env` file.**
+> The `.env.example` file contains detailed inline comments for every variable. This section provides a quick reference.
 
-> ⚠️ **Never commit your `.env` file.** It is already excluded via `.gitignore`. `.env.example` (with placeholders only) is what lives in the repo.
+### Step 1 — Generate your secrets
 
-### Generating secure values
+Run the following commands once to generate cryptographically strong values:
 
 ```bash
-# For API_KEY and NEXTAUTH_SECRET
-openssl rand -hex 32
-
-# For passwords (Postgres, Redis, Elastic, Admin, Operator)
-openssl rand -base64 32
+echo "API_KEY=$(openssl rand -hex 32)"
+echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)"
+echo "POSTGRES_PASSWORD=$(openssl rand -base64 32)"
+echo "REDIS_PASSWORD=$(openssl rand -base64 32)"
+echo "ELASTIC_PASSWORD=$(openssl rand -base64 32)"
+echo "ADMIN_PASSWORD=$(openssl rand -base64 32)"
+echo "OPERATOR_PASSWORD=$(openssl rand -base64 32)"
 ```
 
-### Variable Reference
+Copy each output value into the corresponding variable in your `.env` file.
 
-#### API Authentication (`REQUIRED`)
-| Variable | Description |
-| :--- | :--- |
-| `API_KEY` | Bearer token that secures all REST API endpoints. Must be at least 32 hex characters. Rotate immediately if exposed. Generate with `openssl rand -hex 32`. |
+> ⚠️ **Never commit your `.env` file.** It is already excluded via `.gitignore`.
 
-#### NextAuth Session Signing (`REQUIRED`)
-| Variable | Description |
-| :--- | :--- |
-| `NEXTAUTH_SECRET` | Cryptographically random string used to sign JWTs in the frontend. Must be identical in both the backend and `secureforge-frontend`. Generate with `openssl rand -base64 32`. |
+---
 
-#### PostgreSQL (`REQUIRED`)
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `POSTGRES_USER` | `secureforge` | Database username. |
-| `POSTGRES_PASSWORD` | — | Strong password for the database user. |
-| `POSTGRES_DB` | `secureforge` | Name of the database to create. |
+### Step 2 — Variable Reference
 
-#### Dashboard Login Credentials (`REQUIRED`)
-| Variable | Description |
-| :--- | :--- |
-| `ADMIN_PASSWORD` | Password for the `admin` role. Full access to all platform features. |
-| `OPERATOR_PASSWORD` | Password for the `operator` role. Can launch simulations but cannot modify platform config. |
+#### Authentication & Sessions
 
-> Set these **before** running `docker-compose up --build`. They are baked in at container build time.
+| Variable | Required | Description | How to generate |
+| :--- | :---: | :--- | :--- |
+| `API_KEY` | ✅ Yes | Bearer token for all REST API requests. Used by the frontend and any API clients. Rotating it invalidates all existing clients until updated. | `openssl rand -hex 32` |
+| `NEXTAUTH_SECRET` | ✅ Yes | Signs and verifies NextAuth.js session JWTs. Must be identical in both the `bas-engine` and `dashboard` containers (handled automatically via `.env`). | `openssl rand -base64 32` |
 
-#### Redis Broker Auth (`REQUIRED`)
-| Variable | Description |
-| :--- | :--- |
-| `REDIS_PASSWORD` | Must match the `--requirepass` value set in `docker-compose.yml`. |
+#### Dashboard Login
 
-#### Elasticsearch Security (`REQUIRED` if `xpack.security.enabled=true`)
-| Variable | Description |
-| :--- | :--- |
-| `ELASTIC_PASSWORD` | Password for the built-in Elastic superuser. Only needed if you enable X-Pack security. |
+| Variable | Required | Description | How to generate |
+| :--- | :---: | :--- | :--- |
+| `ADMIN_PASSWORD` | ✅ Yes | Password for the `admin` dashboard user (full access). This is an **application-level** credential, not a database password. | `openssl rand -base64 32` |
+| `OPERATOR_PASSWORD` | ✅ Yes | Password for the `operator` dashboard user (read-only access). | `openssl rand -base64 32` |
 
-#### Deployment URLs (`OPTIONAL`)
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `NEXTAUTH_URL` | `http://localhost:3001` | Full URL of the frontend. Must be updated for non-localhost deployments. |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Full URL of the backend API, as seen by the browser. |
-| `ENVIRONMENT` | `production` | Set to `development` for verbose error output. |
+#### PostgreSQL Database
 
-#### Lab Targets (`OPTIONAL`)
-| Variable | Description |
-| :--- | :--- |
-| `LAB_TARGETS` | Comma-separated list of private IPs that bypass the built-in SSRF block for authorized lab testing. Leave empty in production. **Never include real production IPs.** |
+| Variable | Required | Description | How to generate |
+| :--- | :---: | :--- | :--- |
+| `POSTGRES_USER` | ✅ Yes | Database username. Default: `secureforge`. Docker creates this user automatically on first run. | Use default or choose a name |
+| `POSTGRES_PASSWORD` | ✅ Yes | Database password. Docker reads this at container creation time. ⚠️ Changing this after the volume exists requires `docker compose down -v`. | `openssl rand -base64 32` |
+| `POSTGRES_DB` | ✅ Yes | Database name. Default: `secureforge`. | Use default or choose a name |
 
-#### SMTP Alerting (`OPTIONAL`)
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `SMTP_SERVER` | — | Hostname of your mail relay (e.g. `smtp.gmail.com`). |
-| `SMTP_PORT` | `587` | SMTP port. Use `587` for STARTTLS or `465` for SSL. |
-| `SMTP_USER` | — | SMTP login username. |
-| `SMTP_PASS` | — | SMTP login password or app-specific token. |
+#### Redis Message Broker
+
+| Variable | Required | Description | How to generate |
+| :--- | :---: | :--- | :--- |
+| `REDIS_PASSWORD` | ✅ Yes | Authentication password for Redis. In the default config, Redis runs without auth. To activate, add `--requirepass ${REDIS_PASSWORD}` to the Redis command in `docker-compose.yml`. | `openssl rand -base64 32` |
+
+#### Elasticsearch
+
+| Variable | Required | Description | How to generate |
+| :--- | :---: | :--- | :--- |
+| `ELASTIC_PASSWORD` | ✅ Yes (production) | Password for the Elasticsearch `elastic` superuser. ⚠️ Not enforced unless `xpack.security.enabled=true` in `docker-compose.yml`. | `openssl rand -base64 32` |
+
+#### Deployment URLs (Optional)
+
+| Variable | Required | Default | Description |
+| :--- | :---: | :--- | :--- |
+| `NEXTAUTH_URL` | ⚙️ Optional | `http://localhost:3001` | Public URL of the dashboard. Change for production deployments. |
+| `NEXT_PUBLIC_API_URL` | ⚙️ Optional | `http://localhost:8000` | URL the **browser** uses to reach the BAS Engine API. |
+| `ENVIRONMENT` | ⚙️ Optional | `production` | Set to `development` for verbose error tracebacks. |
+
+#### Lab Targets (Optional)
+
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `LAB_TARGETS` | ⚙️ Optional | Comma-separated private IPs allowed as attack targets, bypassing the SSRF block. Example: `192.168.56.101,10.0.0.5`. ⚠️ Never include production IPs. |
+
+#### SMTP Alerting (Optional)
+
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `SMTP_SERVER` | ⚙️ Optional | SMTP hostname for email alerting. Leave blank to disable. |
+| `SMTP_PORT` | ⚙️ Optional | SMTP port (default: `587`). |
+| `SMTP_USER` | ⚙️ Optional | SMTP username / email address. |
+| `SMTP_PASS` | ⚙️ Optional | SMTP password. |
+
+---
+
+### Step 3 — Which variables must match Docker services?
+
+| Variable | User Generated | Docker Auto-Creates | Must Match Another Service |
+| :--- | :---: | :---: | :--- |
+| `API_KEY` | ✅ | ❌ | `dashboard` ↔ `bas-engine` (same value, handled via `.env`) |
+| `NEXTAUTH_SECRET` | ✅ | ❌ | `dashboard` ↔ `bas-engine` (same value, handled via `.env`) |
+| `POSTGRES_PASSWORD` | ✅ | ❌ | PostgreSQL container (read at init time) |
+| `REDIS_PASSWORD` | ✅ | ❌ | Redis container (only if `--requirepass` enabled in `docker-compose.yml`) |
+| `ELASTIC_PASSWORD` | ✅ | ❌ | Elasticsearch (only if `xpack.security.enabled=true`) |
+| `ADMIN_PASSWORD` | ✅ | ❌ | BAS Engine application only |
+| `OPERATOR_PASSWORD` | ✅ | ❌ | BAS Engine application only |
 
 ---
 
@@ -114,9 +139,15 @@ openssl rand -base64 32
 
 **Simulations stuck in `PENDING`?** The Celery workers aren't running or can't reach Redis. Check with `docker logs secureforge-celery-worker-1` and verify `REDIS_URL` and `REDIS_PASSWORD` are correct.
 
+**`403 Forbidden` on all API calls?** Your `API_KEY` in `.env` is missing or doesn't match what the dashboard is sending. Rebuild containers after changing: `docker compose up -d --build`.
+
+**Dashboard login fails immediately?** `NEXTAUTH_SECRET` may be missing or mismatched. Ensure it is set and rebuild the `dashboard` container.
+
 **Live Telemetry stream is blank?** WebSocket connection failure. Make sure your reverse proxy (Nginx, Traefik, or AWS ALB) allows WebSocket upgrades (`Connection: Upgrade`, `Upgrade: websocket`) on the `/ws` route.
 
 **`asyncpg.exceptions.TooManyConnectionsError`?** You've scaled Celery workers beyond what PostgreSQL can handle. Either reduce worker count or increase `max_connections` in `postgresql.conf`.
+
+**Changed `POSTGRES_PASSWORD` and now the database won't start?** The password is baked into the Docker volume at first initialization. Run `docker compose down -v` to wipe the volume and restart fresh (⚠️ this deletes all stored data).
 
 ---
 
