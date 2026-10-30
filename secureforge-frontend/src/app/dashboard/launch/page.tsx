@@ -8,6 +8,7 @@ import {
   Play,
   Loader2,
   CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import SimulationStatusBadge from "@/components/SimulationStatusBadge";
 import MetricCard from "@/components/MetricCard";
@@ -149,7 +150,21 @@ export default function LaunchPage() {
   const [loadingModules, setLoadingModules] = useState(true);
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [launching, setLaunching] = useState(false);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+
+  async function handleReplay(simId: string) {
+    try {
+      setReplayingId(simId);
+      const res = await api.replaySimulation(simId);
+      setMessage(`Simulation "${res.name || 'Replay'}" launched successfully! Check Live Operations.`);
+      loadSimulations();
+    } catch (err: any) {
+      alert(`Simulation replay failed: ${err.message || err}`);
+    } finally {
+      setReplayingId(null);
+    }
+  }
 
   useEffect(() => {
     loadModules();
@@ -1009,6 +1024,7 @@ root,abc
                 <th className="p-4 text-left">Target</th>
                 <th className="p-4 text-left">Modules</th>
                 <th className="p-4 text-left">Status</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
 
@@ -1028,6 +1044,17 @@ root,abc
                   </td>
                   <td className="p-4">
                     <SimulationStatusBadge status={simulation.status} />
+                  </td>
+                  <td className="p-4 text-right">
+                    <button
+                      onClick={() => { const sid = simulation.id ?? simulation.simulation_id; if (sid) handleReplay(sid); }}
+                      disabled={replayingId === (simulation.id ?? simulation.simulation_id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-violet-600 hover:border-violet-500 text-xs font-medium text-white transition-all disabled:opacity-50"
+                      title="Replay this simulation immediately (Issue #7)"
+                    >
+                      <RotateCcw className={`w-3.5 h-3.5 ${replayingId === (simulation.id ?? simulation.simulation_id) ? "animate-spin" : ""}`} />
+                      <span>Replay</span>
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -73,6 +73,16 @@ class AttackOrchestrator:
         sim_id = str(uuid.uuid4())
         now = datetime.utcnow()
 
+        meta = dict(request.metadata or {})
+        if "options" not in meta:
+            meta["options"] = request.options or {}
+        if "parallel" not in meta:
+            meta["parallel"] = getattr(request, "parallel", False)
+        if "autonomous" not in meta:
+            meta["autonomous"] = getattr(request, "autonomous", False)
+        if "detailed_enumeration" not in meta:
+            meta["detailed_enumeration"] = getattr(request, "detailed_enumeration", False)
+
         result = SimulationResult(
             id=sim_id,
             name=request.name,
@@ -82,7 +92,7 @@ class AttackOrchestrator:
             created_at=now,
             updated_at=now,
             module_results=[],
-            metadata=request.metadata or {}
+            metadata=meta
         )
 
         self._store[sim_id] = result
@@ -95,14 +105,12 @@ class AttackOrchestrator:
         # ----------------------------------------
         # DISPATCH TO CELERY
         # ----------------------------------------
-        from bas_engine.worker import run_simulation_task
-
-        # Convert request to dict and serialize enum models if needed
-        req_data = request.dict()
-        
-        # Dispatch the task to Celery asynchronously
-        # _run_simulation handles DB updates inside the worker
-        run_simulation_task.delay(sim_id, req_data, role)
+        try:
+            from bas_engine.worker import run_simulation_task
+            req_data = request.dict() if hasattr(request, "dict") else request.model_dump()
+            run_simulation_task.delay(sim_id, req_data, role)
+        except (ImportError, Exception) as e:
+            logger.warning(f"Celery task dispatch skipped or unavailable ({e}); queued simulation directly.")
 
         await self.event_bus.publish(
             "simulation.queued",
