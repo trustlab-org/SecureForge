@@ -122,6 +122,25 @@ export const api = {
     );
   },
 
+  getSimulationEvents(
+    simId: string
+  ) {
+    return request<any>(
+      `/simulations/${simId}/events`
+    );
+  },
+
+  replaySimulation(
+    simId: string
+  ) {
+    return request<any>(
+      `/simulations/${simId}/replay`,
+      {
+        method: "POST"
+      }
+    );
+  },
+
   getRecentReplayEvents() {
     return request<any>(
       "/replay/recent/events"
@@ -173,5 +192,133 @@ export const api = {
         method: "DELETE",
       }
     );
+  },
+
+  // ── Continuous Schedules ──
+  getSchedules(status?: string) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<any[]>(`/schedules${q}`);
+  },
+
+  createSchedule(data: any) {
+    return request<any>("/schedules", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateSchedule(id: string, data: any) {
+    return request<any>(`/schedules/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteSchedule(id: string) {
+    return request<any>(`/schedules/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  pauseSchedule(id: string) {
+    return request<any>(`/schedules/${id}/pause`, {
+      method: "POST",
+    });
+  },
+
+  resumeSchedule(id: string) {
+    return request<any>(`/schedules/${id}/resume`, {
+      method: "POST",
+    });
+  },
+
+  triggerSchedule(id: string) {
+    return request<any>(`/schedules/${id}/trigger`, {
+      method: "POST",
+    });
+  },
+
+  // ── Attack Scenarios (DAG) ──
+  getScenarios() {
+    return request<any[]>("/scenarios");
+  },
+
+  getScenario(id: string) {
+    return request<any>(`/scenarios/${id}`);
+  },
+
+  createScenario(data: any) {
+    return request<any>("/scenarios", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateScenario(id: string, data: any) {
+    return request<any>(`/scenarios/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteScenario(id: string) {
+    return request<any>(`/scenarios/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  executeScenario(id: string, payload?: any) {
+    return request<any>(`/scenarios/${id}/execute`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  // ── Cloud Attack Modules ──
+  getCloudProfiles() {
+    return request<any>("/cloud/profiles");
+  },
+
+  runCloudSimulation(data: any) {
+    return request<any>("/cloud/simulate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ── Phishing Suite ──
+  getPhishingCampaigns() {
+    return request<any[]>("/phishing/campaigns");
+  },
+
+  createPhishingCampaign(data: any) {
+    return request<any>("/phishing/campaigns", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPhishingTemplates() {
+    return request<any[]>("/phishing/templates");
+  },
+
+  getPhishingCampaignStats(id: string) {
+    return request<any>(`/phishing/campaigns/${id}/stats`);
+  },
+
+  // ── API Security Audit ──
+  getApiAudits() {
+    return request<any[]>("/api-audit/scans");
+  },
+
+  startApiAudit(data: any) {
+    return request<any>("/api-audit/scans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  getApiAuditDetails(id: string) {
+    return request<any>(`/api-audit/scans/${id}`);
   },
 };
